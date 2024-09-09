@@ -1,0 +1,10 @@
+.env
+
+.idea
+.DS_Store
+.vscode
+
+dist
+node_modules
+redis-data
+docker-compose.override.yml
