@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
 import { Env } from "./config/env";
+import { Redis } from "./db/redis";
 import { requireAuth } from "./middlewares/auth";
 import { bootstrap } from "./middlewares/bootstrap";
 import { discord } from "./routes/discord";
@@ -30,6 +31,18 @@ const App = new Hono()
   .get("/", (c) => {
     return c.redirect(Env.ROOT_REDIRECT, 303);
   });
+
+async function shutdown() {
+  if (Redis.isOpen) {
+    await Redis.disconnect();
+  }
+
+  process.exit();
+}
+
+process.on("SIGTERM", shutdown);
+
+process.on("SIGINT", shutdown);
 
 export default {
   fetch: App.fetch,

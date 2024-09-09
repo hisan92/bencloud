@@ -29,6 +29,9 @@ WORKDIR /usr/app
 
 ENV APP_PORT=4000
 
+RUN apt-get update
+RUN apt-get install -y curl
+
 USER ubuntu
 
 COPY --chown=ubuntu:ubuntu --from=prerelease /usr/app .

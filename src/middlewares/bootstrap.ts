@@ -7,7 +7,7 @@ export function bootstrap() {
     c.set("Env", Env);
     c.set("Redis", Redis);
 
-    if (!Redis.isReady) {
+    if (!Redis.isOpen) {
       await Redis.connect();
     }
 
