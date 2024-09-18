@@ -32,10 +32,7 @@ export const settings = new Hono()
       return c.notFound();
     }
 
-    const [value, written] = [
-      new TextEncoder().encode(settings[0]),
-      settings[1],
-    ];
+    const [value, written] = [Buffer.from(settings[0], "base64"), settings[1]];
 
     const ifm = c.req.header("if-none-match");
 
@@ -69,7 +66,7 @@ export const settings = new Hono()
     const written = Date.now();
 
     await Redis.hSet(`settings:${sha1(Env.PEPPER_SETTINGS + userId)}`, {
-      value: Buffer.from(body),
+      value: Buffer.from(body).toString("base64"),
       written,
     });
 
