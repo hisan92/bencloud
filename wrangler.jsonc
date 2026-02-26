@@ -34,8 +34,8 @@
 	 */
   "vars": {
     "STORE": "cloudflare",
-    "ROOT_REDIRECT": "https://github.com/hisan92/bencloud",
-    "DISCORD_REDIRECT_URI": "https://bencloud.hisan.me/v1/oauth/callback",
+    "ROOT_REDIRECT": "https://github.com/hisan92/vencloud",
+    "DISCORD_REDIRECT_URI": "https://vencloud.hisan.me/v1/oauth/callback",
     "SIZE_LIMIT": "33554432",
     "ALLOWED_USERS": "907245561760067615"
   },

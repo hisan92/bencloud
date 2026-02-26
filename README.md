@@ -1,6 +1,6 @@
-# Bencloud
+# vencloud
 
-Bencloud is Vencord's API for cloud settings sync rewrite in Typescript!
+Vencord's API for cloud settings sync rewrite in Typescript!
 
 Here is [Vencloud original version](https://github.com/Vencord/Vencloud).
 
@@ -14,7 +14,7 @@ Here is [Vencloud original version](https://github.com/Vencord/Vencloud).
 First of all, you'll have to clone the source code to a convenient location:
 
 ```sh
-git clone https://github.com/hisan92/bencloud
+git clone https://github.com/hisan92/vencloud
 ```
 
 ### Setting up the Config
@@ -24,7 +24,7 @@ All variables are documented there!
 
 ### Running
 
-Don't forget to direct your terminal to the Bencloud directory, e.g. via `cd bencloud`!
+Don't forget to direct your terminal to the Bencloud directory, e.g. via `cd vencloud`!
 
 #### Via Docker
 
