@@ -1,17 +1,31 @@
-import { Hono } from "hono";
+import { hono } from "../hono";
 import { requireAuth } from "../middlewares/auth";
 import { sha1 } from "../util/hash";
+import { match } from "../util/match";
 
-export const root = new Hono()
+export const root = hono()
   .delete(...requireAuth(), async (c) => {
     const userId = c.get("userId");
-    const Env = c.get("Env");
-    const Redis = c.get("Redis");
+    const env = c.get("env");
+    const redis = c.get("redis");
 
-    await Promise.allSettled([
-      Redis.del(`settings:${sha1(Env.PEPPER_SETTINGS + userId)}`),
-      Redis.del(`secrets:${sha1(Env.PEPPER_SECRETS + userId)}`),
-    ]);
+    const settingsKey = `settings:${sha1(env.PEPPER_SETTINGS + userId)}`;
+    const secretsKey = `secrets:${sha1(env.PEPPER_SECRETS + userId)}`;
+
+    await match(env.STORE, {
+      cloudflare: async () => {
+        await Promise.allSettled([
+          c.env.KV.delete(settingsKey),
+          c.env.KV.delete(secretsKey),
+        ]);
+      },
+      redis: async () => {
+        await Promise.allSettled([
+          redis.del(settingsKey),
+          redis.del(secretsKey),
+        ]);
+      },
+    });
 
     return new Response(null, { status: 204 });
   })

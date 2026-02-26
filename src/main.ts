@@ -1,9 +1,9 @@
-import { Hono } from "hono";
+import { contextStorage } from "hono/context-storage";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
-import { Env } from "./config/env";
-import { Redis } from "./db/redis";
+import { env } from "./config/env";
+import { hono } from "./hono";
 import { requireAuth } from "./middlewares/auth";
 import { bootstrap } from "./middlewares/bootstrap";
 import { discord } from "./routes/discord";
@@ -19,32 +19,18 @@ const discordOrigins = [
   "https://canary.discordapp.com",
 ];
 
-const App = new Hono()
+const app = hono()
   .use(cors({ origin: discordOrigins, exposeHeaders: ["ETag"] }))
   .use(logger())
   .use(secureHeaders())
+  .use(contextStorage())
   .use(bootstrap())
   .all("/v1/settings", ...requireAuth())
   .route("/v1/settings", settings)
   .route("/v1/oauth", discord)
   .route("/v1/", root)
   .get("/", (c) => {
-    return c.redirect(Env.ROOT_REDIRECT, 303);
+    return c.redirect(env(c).ROOT_REDIRECT, 303);
   });
 
-async function shutdown() {
-  if (Redis.isOpen) {
-    await Redis.disconnect();
-  }
-
-  process.exit();
-}
-
-process.on("SIGTERM", shutdown);
-
-process.on("SIGINT", shutdown);
-
-export default {
-  fetch: App.fetch,
-  port: Env.APP_PORT,
-};
+export default app;

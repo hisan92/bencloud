@@ -1,19 +1,20 @@
 import { randomBytes } from "crypto";
-import { Hono } from "hono";
 import { validator } from "hono/validator";
 import { ofetch } from "ofetch";
-import { object, string } from "zod";
+import z from "zod";
+import { hono } from "../hono";
 import { sha1 } from "../util/hash";
+import { match } from "../util/match";
 
-const CallbackSchema = object({ code: string() });
-const DiscordTokenSchema = object({ access_token: string() });
-const DiscordMeSchema = object({ id: string() });
+const callbackSchema = z.object({ code: z.string() });
+const tokenSchema = z.object({ access_token: z.string() });
+const discordMeSchema = z.object({ id: z.string() });
 
-export const discord = new Hono()
+export const discord = hono()
   .get(
     "/callback",
     validator("query", async (data, c) => {
-      const parsed = CallbackSchema.safeParse(data);
+      const parsed = callbackSchema.safeParse(data);
 
       if (!parsed.success) {
         return c.json({ error: "Missing code" }, 400);
@@ -23,18 +24,18 @@ export const discord = new Hono()
     }),
     async (c) => {
       const { code } = c.req.valid("query");
-      const Env = c.get("Env");
+      const env = c.get("env");
 
       const params = new URLSearchParams();
 
-      params.append("client_id", Env.DISCORD_CLIENT_ID);
-      params.append("client_secret", Env.DISCORD_CLIENT_SECRET);
+      params.append("client_id", env.DISCORD_CLIENT_ID);
+      params.append("client_secret", env.DISCORD_CLIENT_SECRET);
       params.append("grant_type", "authorization_code");
       params.append("code", code);
-      params.append("redirect_uri", Env.DISCORD_REDIRECT_URI);
+      params.append("redirect_uri", env.DISCORD_REDIRECT_URI);
       params.append("scope", "identify");
 
-      const token = await ofetch<Zod.infer<typeof DiscordTokenSchema>>(
+      const token = await ofetch<z.infer<typeof tokenSchema>>(
         "https://discord.com/api/oauth2/token",
         {
           method: "post",
@@ -42,35 +43,35 @@ export const discord = new Hono()
             "Content-Type": "application/x-www-form-urlencoded",
           },
           body: params.toString(),
-        }
+        },
       );
 
-      const discordToken = DiscordTokenSchema.safeParse(token);
+      const discordToken = tokenSchema.safeParse(token);
 
       if (!discordToken.success) {
         console.warn(
           "[Discord] Failed to request access token: %s",
-          discordToken.error.toString()
+          discordToken.error.toString(),
         );
 
         return c.json({ error: "Failed to request access token" }, 500);
       }
 
-      const discordMe = await ofetch<Zod.infer<typeof DiscordMeSchema>>(
+      const discordMe = await ofetch<z.infer<typeof discordMeSchema>>(
         "https://discord.com/api/users/@me",
         {
           headers: {
             Authorization: `Bearer ${discordToken.data.access_token}`,
           },
-        }
+        },
       );
 
-      const me = DiscordMeSchema.safeParse(discordMe);
+      const me = discordMeSchema.safeParse(discordMe);
 
       if (!me.success) {
         console.warn(
           "[Discord] Failed to request user: %s",
-          me.error.toString()
+          me.error.toString(),
         );
 
         return c.json({ error: "Failed to request user" }, 500);
@@ -78,31 +79,41 @@ export const discord = new Hono()
 
       const userId = me.data.id;
 
-      if (Env.ALLOWED_USERS.length > 0 && !Env.ALLOWED_USERS.includes(userId)) {
+      if (env.ALLOWED_USERS.length > 0 && !env.ALLOWED_USERS.includes(userId)) {
         return c.json({ error: "User is not whitelisted" }, 403);
       }
 
-      const Redis = c.get("Redis");
+      const redis = c.get("redis");
 
-      let secret = await Redis.get(
-        `secrets:${sha1(Env.PEPPER_SECRETS + userId)}`
-      );
+      const secretsKey = `secrets:${sha1(env.PEPPER_SECRETS + userId)}`;
+
+      let secret = await match(env.STORE, {
+        cloudflare: () => c.env.KV.get(secretsKey),
+        redis: () => redis.get(secretsKey),
+      });
 
       if (!secret) {
         const bytes = randomBytes(48);
         secret = bytes.toString("hex");
 
-        await Redis.set(`secrets:${sha1(Env.PEPPER_SECRETS + userId)}`, secret);
+        await match(env.STORE, {
+          cloudflare: async () => {
+            await c.env.KV.put(secretsKey, secret!);
+          },
+          redis: async () => {
+            await redis.set(secretsKey, secret!);
+          },
+        });
       }
 
       return c.json({ secret });
-    }
+    },
   )
   .get("/settings", async (c) => {
-    const Env = c.get("Env");
+    const env = c.get("env");
 
     return c.json({
-      clientId: Env.DISCORD_CLIENT_ID,
-      redirectUri: Env.DISCORD_REDIRECT_URI,
+      clientId: env.DISCORD_CLIENT_ID,
+      redirectUri: env.DISCORD_REDIRECT_URI,
     });
   });

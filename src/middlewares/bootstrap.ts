@@ -1,13 +1,18 @@
 import { createMiddleware } from "hono/factory";
-import { Env } from "../config/env";
-import { Redis } from "../db/redis";
+import { env } from "../config/env";
+import { redis } from "../db/redis";
 
 export function bootstrap() {
   return createMiddleware(async (c, next) => {
-    c.set("Env", Env);
-    c.set("Redis", Redis);
+    const Env = env(c);
+    const enableRedis = Env.STORE === "redis";
 
-    if (!Redis.isOpen) {
+    const Redis = await redis(c);
+
+    c.set("env", Env);
+    c.set("redis", Redis);
+
+    if (enableRedis && !Redis.isOpen) {
       await Redis.connect();
     }
 

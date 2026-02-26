@@ -1,15 +1,17 @@
 import { createFactory } from "hono/factory";
 import { validator } from "hono/validator";
-import { object, string } from "zod";
+import z from "zod";
+import type { Env } from "../hono";
 import { sha1 } from "../util/hash";
+import { match } from "../util/match";
 
-const factory = createFactory();
+const factory = createFactory<Env>();
 
-const AuthorizationSchema = object({ authorization: string() });
+const authorizationSchema = z.object({ authorization: z.string() });
 
 const handlers = factory.createHandlers(
   validator("header", async (data, c) => {
-    const parsed = AuthorizationSchema.safeParse(data);
+    const parsed = authorizationSchema.safeParse(data);
 
     if (!parsed.success) {
       return c.json({ error: "Missing authorization" }, 401);
@@ -21,7 +23,8 @@ const handlers = factory.createHandlers(
     const authToken = c.req.valid("header").authorization;
     const token = Buffer.from(authToken, "base64");
 
-    const parsed = string()
+    const parsed = z
+      .string()
       .regex(/^[a-z0-9]+:[0-9]+$/)
       .safeParse(token.toString());
 
@@ -31,12 +34,15 @@ const handlers = factory.createHandlers(
 
     const [secret, userId] = parsed.data.split(":");
 
-    const Env = c.get("Env");
-    const Redis = c.get("Redis");
+    const env = c.get("env");
+    const redis = c.get("redis");
 
-    const stored = await Redis.get(
-      `secrets:${sha1(Env.PEPPER_SECRETS + userId)}`
-    );
+    const secretsKey = `secrets:${sha1(env.PEPPER_SECRETS + userId)}`;
+
+    const stored = await match(env.STORE, {
+      cloudflare: () => c.env.KV.get(secretsKey),
+      redis: () => redis.get(secretsKey),
+    });
 
     if (!stored || stored !== secret) {
       return c.json({ error: "Invalid authorization" }, 401);
@@ -45,7 +51,7 @@ const handlers = factory.createHandlers(
     c.set("userId", userId);
 
     await next();
-  }
+  },
 );
 
 export function requireAuth() {

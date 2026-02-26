@@ -1,32 +1,83 @@
-import { Hono } from "hono";
+import z from "zod";
+import { hono } from "../hono";
 import { sha1 } from "../util/hash";
+import { match } from "../util/match";
+import { json } from "../validators/json";
 
-export const settings = new Hono()
+const settingsSchema = z.object({
+  value: z.string(),
+  written: z
+    .string()
+    .min(13)
+    .regex(/^[0-9]$/),
+});
+
+export const settings = hono()
   .options(async (c) => {
     const userId = c.get("userId");
-    const Env = c.get("Env");
-    const Redis = c.get("Redis");
+    const env = c.get("env");
+    const redis = c.get("redis");
 
-    const written = await Redis.hGet(
-      `settings:${sha1(Env.PEPPER_SETTINGS + userId)}`,
-      "written"
-    );
+    const settingsKey = `settings:${sha1(env.PEPPER_SETTINGS + userId)}`;
+
+    const written = await match(env.STORE, {
+      cloudflare: () =>
+        c.env.KV.get(settingsKey).then((value) => {
+          if (value) {
+            const _json = json().safeParse(value);
+
+            if (_json.error) {
+              return;
+            }
+
+            const _settings = settingsSchema.safeParse(_json.data);
+
+            if (_settings.error) {
+              return;
+            }
+
+            return _settings.data.written;
+          }
+        }),
+      redis: () => redis.hGet(settingsKey, "written"),
+    });
 
     if (!written) {
       return c.notFound();
     }
 
-    return new Response(null, { headers: { ETag: written }, status: 204 });
+    return c.body(null, 204, { ETag: written });
   })
   .get(async (c) => {
     const userId = c.get("userId");
-    const Env = c.get("Env");
-    const Redis = c.get("Redis");
+    const env = c.get("env");
+    const redis = c.get("redis");
 
-    const settings = await Redis.hmGet(
-      `settings:${sha1(Env.PEPPER_SETTINGS + userId)}`,
-      ["value", "written"]
-    );
+    const settingsKey = `settings:${sha1(env.PEPPER_SETTINGS + userId)}`;
+
+    const settings = await match(env.STORE, {
+      cloudflare: () =>
+        c.env.KV.get(settingsKey).then((value) => {
+          if (value) {
+            const _json = json().safeParse(value);
+
+            if (_json.error) {
+              return [];
+            }
+
+            const _settings = settingsSchema.safeParse(_json.data);
+
+            if (_settings.error) {
+              return [];
+            }
+
+            return [_settings.data.value, _settings.data.written];
+          }
+
+          return [];
+        }),
+      redis: () => redis.hmGet(settingsKey, ["value", "written"]),
+    });
 
     if (!settings[0]) {
       return c.notFound();
@@ -37,10 +88,17 @@ export const settings = new Hono()
     const ifm = c.req.header("if-none-match");
 
     if (ifm && ifm === written) {
-      return new Response(null, { status: 304 });
+      return c.body(null, 304);
     }
 
-    return new Response(value, {
+    const stream = new ReadableStream<Buffer>({
+      start: (controller) => {
+        controller.enqueue(value);
+        controller.close();
+      },
+    });
+
+    return c.body(stream, {
       headers: { "Content-Type": "application/octet-stream", ETag: written },
     });
   })
@@ -48,36 +106,56 @@ export const settings = new Hono()
     if (c.req.header("Content-Type") !== "application/octet-stream") {
       return c.json(
         { error: "Content type must be application/octet-stream" },
-        415
+        415,
       );
     }
 
-    const Env = c.get("Env");
+    const env = c.get("env");
 
     const body = await c.req.arrayBuffer();
 
-    if (body.byteLength > Env.SIZE_LIMIT) {
+    if (body.byteLength > env.SIZE_LIMIT) {
       return c.json({ error: "Settings are too large" }, 413);
     }
 
     const userId = c.get("userId");
-    const Redis = c.get("Redis");
+    const redis = c.get("redis");
 
     const written = Date.now();
 
-    await Redis.hSet(`settings:${sha1(Env.PEPPER_SETTINGS + userId)}`, {
+    const settingsKey = `settings:${sha1(env.PEPPER_SETTINGS + userId)}`;
+
+    const data = {
       value: Buffer.from(body).toString("base64"),
       written,
+    };
+
+    await match(env.STORE, {
+      cloudflare: async () => {
+        await c.env.KV.put(settingsKey, JSON.stringify(data));
+      },
+      redis: async () => {
+        await redis.hSet(settingsKey, data);
+      },
     });
 
     return c.json({ written });
   })
   .delete(async (c) => {
     const userId = c.get("userId");
-    const Env = c.get("Env");
-    const Redis = c.get("Redis");
+    const env = c.get("env");
+    const redis = c.get("redis");
 
-    await Redis.del(`settings:${sha1(Env.PEPPER_SETTINGS + userId)}`);
+    const settingsKey = `settings:${sha1(env.PEPPER_SETTINGS + userId)}`;
 
-    return new Response(null, { status: 204 });
+    await match(env.STORE, {
+      cloudflare: async () => {
+        await c.env.KV.delete(settingsKey);
+      },
+      redis: async () => {
+        await redis.del(settingsKey);
+      },
+    });
+
+    return c.body(null, 204);
   });

@@ -1,0 +1,58 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "square-shape-fd8d",
+  "main": "src/main.ts",
+  "compatibility_date": "2026-02-24",
+  "preview_urls": false,
+  "minify": true,
+  "observability": {
+    "enabled": true
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  /**
+	 * Smart Placement
+	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
+	 */
+  // "placement": {  "mode": "smart" }
+  /**
+	 * Bindings
+	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
+	 * databases, object storage, AI inference, real-time communication and more.
+	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
+	 */
+  /**
+	 * Environment Variables
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
+	 * Note: Use secrets to store sensitive data.
+	 * https://developers.cloudflare.com/workers/configuration/secrets/
+	 */
+  "vars": {
+    "STORE": "cloudflare",
+    "ROOT_REDIRECT": "https://github.com/hisan92/bencloud",
+    "DISCORD_REDIRECT_URI": "https://bencloud.hisan.me/v1/oauth/callback",
+    "SIZE_LIMIT": "33554432",
+    "ALLOWED_USERS": "907245561760067615"
+  },
+  /**
+	 * Static Assets
+	 * https://developers.cloudflare.com/workers/static-assets/binding/
+	 */
+  // "assets": {  "directory": "./public/",  "binding": "ASSETS" }
+  /**
+	 * Service Bindings (communicate between multiple Workers)
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
+	 */
+  // "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "cfad90d79dec461ab2e29ddf75cd3bec",
+    }
+  ]
+}

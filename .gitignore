@@ -4,7 +4,9 @@
 .DS_Store
 .vscode
 
+.wrangler
 dist
 node_modules
 redis-data
 docker-compose.override.yml
+*.cpuprofile

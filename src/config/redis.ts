@@ -1,6 +1,5 @@
-import { parseEnv } from "znv";
-import { string } from "zod";
+import z from "zod";
 
-export const Env = parseEnv(process.env, {
-  REDIS_URI: string().url().default("redis://localhost:6379"),
-});
+export const Env = {
+  REDIS_URI: z.string().url().max(256).default("redis://localhost:6379"),
+};
