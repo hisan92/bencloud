@@ -1,4 +1,4 @@
-FROM oven/bun:1.1-alpine AS base
+FROM oven/bun:1.3-alpine AS base
 
 WORKDIR /usr/app
 
@@ -23,21 +23,31 @@ ENV NODE_ENV=production
 RUN bun build --compile ./src/main.ts --outfile ./dist/main
 
 # runner
-FROM ubuntu:24.04
+FROM alpine:3.22
 
 WORKDIR /usr/app
 
-ENV APP_PORT=4000
+ENV PORT=3000 \
+    NODE_ENV=production
 
-RUN apt-get update
-RUN apt-get install -y curl
+ARG USER=vencloud \
+    GROUP=vencloud \
+    UID=1000 \
+    GID=1000
 
-USER ubuntu
+RUN addgroup --system --gid $GID $USER
+RUN adduser --system --uid $UID --disabled-password --no-create-home --ingroup $GROUP $USER
 
-COPY --chown=ubuntu:ubuntu --from=prerelease /usr/app .
+RUN apk update
+RUN apk add --no-cache curl libgcc libstdc++ && \
+    rm -rf /var/cache/apk/*
 
-EXPOSE $APP_PORT
+USER $USER
 
-HEALTHCHECK --interval=15s --timeout=3s CMD curl -f http://localhost:$APP_PORT/v1/ || exit 1
+COPY --chown=$USER:$GROUP --from=prerelease /usr/app .
+
+EXPOSE $PORT
+
+HEALTHCHECK --interval=15s --timeout=3s CMD curl -f http://localhost:$PORT/v1/ || exit 1
 
 CMD [ "./dist/main" ]
